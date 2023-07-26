@@ -1,0 +1,102 @@
+name: Simple perl test
+
+on:
+  workflow_call:
+    inputs:
+      since-perl:
+        description: "Test with all Perls since given version."
+        type: string
+        required: true
+        default: "5.10"
+      with-devel:
+        description: "Whether to test also with 'devel' Perl"
+        type: boolean
+        default: false
+      unstable:
+        description: "Which perl versions are considered unstable. Value is JSON array."
+        type: string
+        default: "[ 'devel' ]"
+
+jobs:
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    name: List perl versions
+    outputs:
+      perl-versions: ${{ steps.action.outputs.perl-versions }}
+    steps:
+      - name: Perl versions action step
+        id: action
+        uses: happy-barney/perl-versions@main
+        with:
+          since-perl: ${{ inputs.since-perl }}
+          with-devel: ${{ inputs.with-devel }}
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    container:
+      image: perldocker/perl-tester:latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: install build dependencies
+        if: ${{ success () }}
+        run: cpan-install-build-deps
+
+      - name: build distribution
+        if: ${{ success () }}
+        run: build-dist
+
+      - uses: actions/upload-artifact@master
+        with:
+          name: build_dir
+          path: build_dir
+
+  test:
+    name: Perl ${{ matrix.perl-version }}
+    runs-on: ubuntu-latest
+    needs:
+      - prepare-matrix
+      - build
+    container:
+      image: perldocker/perl-tester:${{ matrix.perl-version }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version: ${{ fromJson (needs.prepare-matrix.outputs.perl-versions) }}
+
+    steps:
+      - uses: actions/download-artifact@master
+        with:
+          name: build_dir
+          path: .
+
+      - name: Install test dependencies
+        if: ${{ success () }}
+        run: cpan-install-dist-deps
+
+      - name: Test
+        id: test
+        if: ${{ success () }}
+        continue-on-error: ${{ contains (fromJson (inputs.unstable), matrix.perl-version) }}
+        run: prove -lr --jobs $(nproc --all) --state save t
+
+      - name: Publish .prove
+        if: ${{ failure () && steps.test.conclusion == 'failure' }}
+        uses: actions/upload-artifact@master
+        with:
+          name: .prove-${{ matrix.perl-version }}
+          path: .prove
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ always () }}
+
+    steps:
+      - uses: geekyeggo/delete-artifact@v2
+        with:
+          name: build_dir

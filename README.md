@@ -21,7 +21,7 @@ on:
 
 jobs:
   call-simple-perl-test:
-    uses: happy-barney/github-workflows/.github/workflows/simple-perltester-workflow.yml@main
+    uses: perl-actions/github-workflows/.github/workflows/simple-perltester-workflow.yml@main
     with:
       since-perl: 5.14
 ```

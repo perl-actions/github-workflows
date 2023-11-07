@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: Perl versions action step
         id: action
-        uses: happy-barney/perl-versions@main
+        uses: perl-actions/perl-versions@main
         with:
           since-perl: ${{ inputs.since-perl }}
           with-devel: ${{ inputs.with-devel }}

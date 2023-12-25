@@ -1,4 +1,4 @@
-name: Simple perl test
+name: Simple perltester workflow
 
 on:
   workflow_call:
@@ -49,10 +49,14 @@ jobs:
         if: ${{ success () }}
         run: build-dist
 
+      - name: pack distribution
+        if: ${{ success () }}
+        run: tar cfz build_dir.tar.gz build_dir
+
       - uses: actions/upload-artifact@master
         with:
-          name: build_dir
-          path: build_dir
+          name: build_dir.tar.gz
+          path: build_dir.tar.gz
 
   test:
     name: Perl ${{ matrix.perl-version }}
@@ -69,22 +73,25 @@ jobs:
         perl-version: ${{ fromJson (needs.prepare-matrix.outputs.perl-versions) }}
 
     steps:
-      - uses: actions/download-artifact@master
+      - name: download artifact
+        uses: actions/download-artifact@master
         with:
-          name: build_dir
-          path: .
+          name: build_dir.tar.gz
 
-      - name: Install test dependencies
+      - name: unpack distribution
+        run: tar -xf build_dir.tar.gz --strip-components=1
+
+      - name: install test dependencies
         if: ${{ success () }}
         run: cpan-install-dist-deps
 
-      - name: Test
+      - name: test
         id: test
         if: ${{ success () }}
         continue-on-error: ${{ contains (fromJson (inputs.unstable), matrix.perl-version) }}
         run: prove -lr --jobs $(nproc --all) --state save t
 
-      - name: Publish .prove
+      - name: publish .prove
         if: ${{ failure () && steps.test.conclusion == 'failure' }}
         uses: actions/upload-artifact@master
         with:
@@ -99,4 +106,4 @@ jobs:
     steps:
       - uses: geekyeggo/delete-artifact@v2
         with:
-          name: build_dir
+          name: build_dir.tar.gz
